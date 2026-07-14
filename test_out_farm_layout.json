@@ -1,0 +1,20 @@
+{
+  "farm_name": "Test Region",
+  "fields": [
+    {
+      "id": "field-01",
+      "name": "Test Square Field",
+      "crop": "soybean",
+      "area_hectares": 4.0,
+      "latitude": 41.9,
+      "longitude": -93.6,
+      "irrigation_zone": "zone-A",
+      "thresholds": {
+        "soil_moisture_min": 0.2,
+        "soil_moisture_max": 0.42,
+        "frost_temp_c": 2.0
+      },
+      "_osm_way_id": 1001
+    }
+  ]
+}

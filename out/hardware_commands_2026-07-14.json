@@ -1,0 +1,63 @@
+{
+  "farm_name": "Story County, Iowa",
+  "generated_at": "2026-07-14",
+  "command_count": 8,
+  "commands": [
+    {
+      "device": "valve_zone-B",
+      "field_id": "field-02",
+      "action": "OPEN",
+      "duration_minutes": 38,
+      "reason": "soil_moisture 0.142 below minimum 0.18"
+    },
+    {
+      "device": "valve_zone-C",
+      "field_id": "field-03",
+      "action": "OPEN",
+      "duration_minutes": 38,
+      "reason": "soil_moisture 0.142 below minimum 0.18"
+    },
+    {
+      "device": "valve_zone-D",
+      "field_id": "field-04",
+      "action": "OPEN",
+      "duration_minutes": 38,
+      "reason": "soil_moisture 0.142 below minimum 0.18"
+    },
+    {
+      "device": "valve_zone-E",
+      "field_id": "field-05",
+      "action": "OPEN",
+      "duration_minutes": 10,
+      "reason": "soil_moisture 0.192 below minimum 0.2"
+    },
+    {
+      "device": "valve_zone-F",
+      "field_id": "field-06",
+      "action": "OPEN",
+      "duration_minutes": 10,
+      "reason": "soil_moisture 0.192 below minimum 0.2"
+    },
+    {
+      "device": "valve_zone-A",
+      "field_id": "field-07",
+      "action": "OPEN",
+      "duration_minutes": 10,
+      "reason": "soil_moisture 0.192 below minimum 0.2"
+    },
+    {
+      "device": "valve_zone-B",
+      "field_id": "field-08",
+      "action": "OPEN",
+      "duration_minutes": 10,
+      "reason": "soil_moisture 0.192 below minimum 0.2"
+    },
+    {
+      "device": "valve_zone-C",
+      "field_id": "field-09",
+      "action": "OPEN",
+      "duration_minutes": 10,
+      "reason": "soil_moisture 0.194 below minimum 0.2"
+    }
+  ]
+}

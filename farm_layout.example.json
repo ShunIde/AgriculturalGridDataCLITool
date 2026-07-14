@@ -1,0 +1,47 @@
+{
+  "farm_name": "Sunny Acres",
+  "fields": [
+    {
+      "id": "field-01",
+      "name": "North Wheat Field",
+      "crop": "wheat",
+      "area_hectares": 12.5,
+      "latitude": 41.85,
+      "longitude": -93.6,
+      "irrigation_zone": "zone-A",
+      "thresholds": {
+        "soil_moisture_min": 0.22,
+        "soil_moisture_max": 0.42,
+        "frost_temp_c": 2.0
+      }
+    },
+    {
+      "id": "field-02",
+      "name": "South Corn Field",
+      "crop": "corn",
+      "area_hectares": 20.0,
+      "latitude": 41.80,
+      "longitude": -93.65,
+      "irrigation_zone": "zone-B",
+      "thresholds": {
+        "soil_moisture_min": 0.25,
+        "soil_moisture_max": 0.45,
+        "frost_temp_c": 3.0
+      }
+    },
+    {
+      "id": "field-03",
+      "name": "East Orchard",
+      "crop": "apple",
+      "area_hectares": 5.0,
+      "latitude": 41.88,
+      "longitude": -93.55,
+      "irrigation_zone": "zone-C",
+      "thresholds": {
+        "soil_moisture_min": 0.18,
+        "soil_moisture_max": 0.38,
+        "frost_temp_c": 1.0
+      }
+    }
+  ]
+}

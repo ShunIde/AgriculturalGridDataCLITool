@@ -1,0 +1,230 @@
+{
+  "farm_name": "Story County, Iowa",
+  "fields": [
+    {
+      "id": "field-01",
+      "name": "State Forest Nursery",
+      "crop": "orchard",
+      "area_hectares": 37.29,
+      "latitude": 41.99941,
+      "longitude": -93.604564,
+      "irrigation_zone": "zone-A",
+      "thresholds": {
+        "soil_moisture_min": 0.18,
+        "soil_moisture_max": 0.38,
+        "frost_temp_c": 1.0
+      },
+      "_osm_way_id": 78137260
+    },
+    {
+      "id": "field-02",
+      "name": "West Orchard",
+      "crop": "orchard",
+      "area_hectares": 2.53,
+      "latitude": 41.880854,
+      "longitude": -93.489066,
+      "irrigation_zone": "zone-B",
+      "thresholds": {
+        "soil_moisture_min": 0.18,
+        "soil_moisture_max": 0.38,
+        "frost_temp_c": 1.0
+      },
+      "_osm_way_id": 306199494
+    },
+    {
+      "id": "field-03",
+      "name": "Orchard Field 03",
+      "crop": "orchard",
+      "area_hectares": 2.11,
+      "latitude": 41.88237,
+      "longitude": -93.483823,
+      "irrigation_zone": "zone-C",
+      "thresholds": {
+        "soil_moisture_min": 0.18,
+        "soil_moisture_max": 0.38,
+        "frost_temp_c": 1.0
+      },
+      "_osm_way_id": 306199518
+    },
+    {
+      "id": "field-04",
+      "name": "Orchard Field 04",
+      "crop": "orchard",
+      "area_hectares": 0.64,
+      "latitude": 41.881246,
+      "longitude": -93.485142,
+      "irrigation_zone": "zone-D",
+      "thresholds": {
+        "soil_moisture_min": 0.18,
+        "soil_moisture_max": 0.38,
+        "frost_temp_c": 1.0
+      },
+      "_osm_way_id": 306199519
+    },
+    {
+      "id": "field-05",
+      "name": "Farmland Field 05",
+      "crop": "farmland",
+      "area_hectares": 7.1,
+      "latitude": 42.002103,
+      "longitude": -93.617571,
+      "irrigation_zone": "zone-E",
+      "thresholds": {
+        "soil_moisture_min": 0.2,
+        "soil_moisture_max": 0.42,
+        "frost_temp_c": 2.0
+      },
+      "_osm_way_id": 370050182
+    },
+    {
+      "id": "field-06",
+      "name": "Farmland Field 06",
+      "crop": "farmland",
+      "area_hectares": 3.54,
+      "latitude": 42.035139,
+      "longitude": -93.667355,
+      "irrigation_zone": "zone-F",
+      "thresholds": {
+        "soil_moisture_min": 0.2,
+        "soil_moisture_max": 0.42,
+        "frost_temp_c": 2.0
+      },
+      "_osm_way_id": 468542820
+    },
+    {
+      "id": "field-07",
+      "name": "Farmland Field 07",
+      "crop": "farmland",
+      "area_hectares": 2.13,
+      "latitude": 42.035033,
+      "longitude": -93.664119,
+      "irrigation_zone": "zone-A",
+      "thresholds": {
+        "soil_moisture_min": 0.2,
+        "soil_moisture_max": 0.42,
+        "frost_temp_c": 2.0
+      },
+      "_osm_way_id": 468542821
+    },
+    {
+      "id": "field-08",
+      "name": "Farmland Field 08",
+      "crop": "farmland",
+      "area_hectares": 18.18,
+      "latitude": 42.013672,
+      "longitude": -93.662236,
+      "irrigation_zone": "zone-B",
+      "thresholds": {
+        "soil_moisture_min": 0.2,
+        "soil_moisture_max": 0.42,
+        "frost_temp_c": 2.0
+      },
+      "_osm_way_id": 468542822
+    },
+    {
+      "id": "field-09",
+      "name": "Farmland Field 09",
+      "crop": "farmland",
+      "area_hectares": 121.71,
+      "latitude": 41.946257,
+      "longitude": -93.319057,
+      "irrigation_zone": "zone-C",
+      "thresholds": {
+        "soil_moisture_min": 0.2,
+        "soil_moisture_max": 0.42,
+        "frost_temp_c": 2.0
+      },
+      "_osm_way_id": 631454826
+    },
+    {
+      "id": "field-10",
+      "name": "Farmland Field 10",
+      "crop": "farmland",
+      "area_hectares": 30.03,
+      "latitude": 41.948017,
+      "longitude": -93.3044,
+      "irrigation_zone": "zone-D",
+      "thresholds": {
+        "soil_moisture_min": 0.2,
+        "soil_moisture_max": 0.42,
+        "frost_temp_c": 2.0
+      },
+      "_osm_way_id": 631454827
+    },
+    {
+      "id": "field-11",
+      "name": "Farmland Field 11",
+      "crop": "farmland",
+      "area_hectares": 221.32,
+      "latitude": 41.884966,
+      "longitude": -93.590585,
+      "irrigation_zone": "zone-E",
+      "thresholds": {
+        "soil_moisture_min": 0.2,
+        "soil_moisture_max": 0.42,
+        "frost_temp_c": 2.0
+      },
+      "_osm_way_id": 725332561
+    },
+    {
+      "id": "field-12",
+      "name": "Farmland Field 12",
+      "crop": "farmland",
+      "area_hectares": 0.67,
+      "latitude": 41.881245,
+      "longitude": -93.576807,
+      "irrigation_zone": "zone-F",
+      "thresholds": {
+        "soil_moisture_min": 0.2,
+        "soil_moisture_max": 0.42,
+        "frost_temp_c": 2.0
+      },
+      "_osm_way_id": 725332563
+    },
+    {
+      "id": "field-13",
+      "name": "Farmland Field 13",
+      "crop": "farmland",
+      "area_hectares": 2.78,
+      "latitude": 41.881763,
+      "longitude": -93.574785,
+      "irrigation_zone": "zone-A",
+      "thresholds": {
+        "soil_moisture_min": 0.2,
+        "soil_moisture_max": 0.42,
+        "frost_temp_c": 2.0
+      },
+      "_osm_way_id": 725332564
+    },
+    {
+      "id": "field-14",
+      "name": "Farmland Field 14",
+      "crop": "farmland",
+      "area_hectares": 0.84,
+      "latitude": 41.882327,
+      "longitude": -93.575703,
+      "irrigation_zone": "zone-B",
+      "thresholds": {
+        "soil_moisture_min": 0.2,
+        "soil_moisture_max": 0.42,
+        "frost_temp_c": 2.0
+      },
+      "_osm_way_id": 725332565
+    },
+    {
+      "id": "field-15",
+      "name": "Farmland Field 15",
+      "crop": "farmland",
+      "area_hectares": 1.17,
+      "latitude": 41.882375,
+      "longitude": -93.576749,
+      "irrigation_zone": "zone-C",
+      "thresholds": {
+        "soil_moisture_min": 0.2,
+        "soil_moisture_max": 0.42,
+        "frost_temp_c": 2.0
+      },
+      "_osm_way_id": 725332566
+    }
+  ]
+}
