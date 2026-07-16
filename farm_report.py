@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-farm_report.py — A single CLI with two subcommands:
+farm_report.py — A single CLI with three subcommands:
 
   layout   Generate a real farm_layout.json from OpenStreetMap farmland
            data (via Overpass + Nominatim), given a place name or bbox.
@@ -9,6 +9,10 @@ farm_report.py — A single CLI with two subcommands:
            against farm_layout.json, and produce a daily Markdown
            operations report and/or a set of mock hardware commands.
 
+  variety  Recommend maize lines per corn field via climate-informed
+           multi-objective genomic selection over a real SNP panel
+           (see breeding.py — requires `pip install -r requirements-breeding.txt`).
+
 Usage:
     # 1) Generate a config from real field data
     python farm_report.py layout --place "Story County, Iowa" --max-fields 15
@@ -16,10 +20,15 @@ Usage:
     # 2) Fetch live weather/soil data and generate outputs
     python farm_report.py run --config farm_layout.json --mode both --output-dir out/
 
+    # 3) Recommend maize varieties per field
+    python farm_report.py variety --config farm_layout.json --output-dir out/
+
 Data sources (all free, no API key required):
     - Nominatim (geocoding a place name -> bounding box)
     - Overpass API (real farmland/orchard/vineyard polygons)
     - Open-Meteo Forecast API (current + forecast soil/weather grid data)
+    - Wisconsin Diversity (WiDiv) maize SNP panel, vendored from PyBrOpS's
+      own examples (MIT-licensed) for the `variety` subcommand
 """
 
 from __future__ import annotations
@@ -45,15 +54,8 @@ log = logging.getLogger("farm_report")
 # ==========================================================================
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-# The primary Overpass instance has been aggressively filtering requests
-# that look automated (missing/generic headers) due to AI-scraper load.
-# We send proper headers and fall back to public mirrors if it still 406s.
-OVERPASS_ENDPOINTS = [
-    "https://overpass-api.de/api/interpreter",
-    "https://overpass.kumi.systems/api/interpreter",
-    "https://overpass.private.coffee/api/interpreter",
-]
-OSM_USER_AGENT = "farm-report-cli/1.0 (educational/demo use; contact: none)"
+OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+OSM_USER_AGENT = "farm-report-cli/1.0 (educational/demo use)"
 
 LANDUSE_TAGS = ["farmland", "orchard", "vineyard", "greenhouse_horticulture"]
 
@@ -101,29 +103,13 @@ out geom;
 
 
 def fetch_overpass(query: str, session: requests.Session, timeout: int = 90) -> list[dict]:
-    headers = {
-        "User-Agent": OSM_USER_AGENT,
-        "Accept": "application/json",
-    }
-    last_error: Exception | None = None
-
-    for endpoint in OVERPASS_ENDPOINTS:
-        log.info("Querying Overpass API for farmland polygons (%s)...", endpoint)
-        try:
-            resp = session.post(endpoint, data={"data": query}, headers=headers, timeout=timeout)
-            resp.raise_for_status()
-        except requests.RequestException as e:
-            log.warning("Overpass endpoint %s failed (%s), trying next mirror...", endpoint, e)
-            last_error = e
-            continue
-
-        payload = resp.json()
-        elements = payload.get("elements", [])
-        log.info("Overpass returned %d element(s).", len(elements))
-        return elements
-
-    assert last_error is not None
-    raise last_error
+    log.info("Querying Overpass API for farmland polygons...")
+    resp = session.post(OVERPASS_URL, data={"data": query}, timeout=timeout)
+    resp.raise_for_status()
+    payload = resp.json()
+    elements = payload.get("elements", [])
+    log.info("Overpass returned %d element(s).", len(elements))
+    return elements
 
 
 def polygon_centroid_and_area_ha(points_latlon: list[tuple[float, float]]) -> tuple[float, float, float]:
@@ -623,6 +609,76 @@ class CommandGenerator:
         return cmds
 
 
+# ==========================================================================
+# Subcommand: variety  (farm_layout.json + genomic panel -> variety report)
+# ==========================================================================
+
+
+def cmd_variety(args: argparse.Namespace) -> int:
+    try:
+        import breeding
+    except ImportError as e:
+        log.error("%s", e)
+        return 1
+
+    try:
+        layout = FarmLayout(args.config)
+    except FileNotFoundError:
+        log.error("Config file not found: %s", args.config)
+        return 1
+    except (ValueError, json.JSONDecodeError) as e:
+        log.error("Invalid farm_layout.json: %s", e)
+        return 1
+
+    corn_fields = [f for f in layout.fields if f.crop.strip().lower() == "corn"]
+    other_crops = sorted({f.crop for f in layout.fields if f.crop.strip().lower() != "corn"})
+    if other_crops:
+        log.info(
+            "Skipping %d field(s) with crop(s) %s - only 'corn' is supported "
+            "in phase 1 (the only genotype panel currently vendored).",
+            len(layout.fields) - len(corn_fields), other_crops,
+        )
+    if not corn_fields:
+        log.warning("No corn fields found in %s - nothing to recommend.", args.config)
+        return 1
+
+    if not args.vcf.exists():
+        log.error("Genotype panel not found: %s", args.vcf)
+        return 1
+
+    try:
+        panel = breeding.load_vcf_dosage(args.vcf)
+        marker_effects = breeding.build_synthetic_marker_effects(panel.dosage.shape[1])
+        gebv = breeding.compute_gebv(panel, marker_effects)
+        grm = breeding.compute_grm(panel.dosage)
+
+        frontier = breeding.compute_or_load_frontier(
+            panel, gebv, grm,
+            vcf_path=args.vcf,
+            cache_path=args.cache,
+            k=args.k,
+            pop_size=args.pop_size,
+            n_gen=args.n_gen,
+            seed=args.seed,
+            force_regen=args.regen_frontier,
+        )
+    except ImportError as e:
+        log.error("%s", e)
+        return 1
+
+    recommendations = breeding.build_recommendations(corn_fields, frontier, gebv, panel.taxa)
+
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    today_str = date.today().isoformat()
+    report_path = args.output_dir / f"variety_recommendations_{today_str}.md"
+    report_path.write_text(
+        breeding.VarietyReportGenerator(layout.farm_name, recommendations).build(),
+        encoding="utf-8",
+    )
+    log.info("Variety report written to %s", report_path)
+    return 0
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     try:
         layout = FarmLayout(args.config)
@@ -699,6 +755,29 @@ def build_argparser() -> argparse.ArgumentParser:
     run_p.add_argument("--mode", choices=["report", "commands", "both"], default="report")
     run_p.add_argument("--output-dir", type=Path, default=Path("."), help="Directory to write output file(s) into")
     run_p.set_defaults(func=cmd_run)
+
+    variety_p = sub.add_parser(
+        "variety",
+        parents=[common],
+        help="Recommend maize lines per field via climate-informed multi-objective "
+        "genomic selection (phase 1 demo - see breeding.py)",
+    )
+    variety_p.add_argument("--config", type=Path, default=Path("farm_layout.json"), help="Path to farm_layout.json")
+    variety_p.add_argument("--output-dir", type=Path, default=Path("."), help="Directory to write the report into")
+    variety_p.add_argument(
+        "--vcf", type=Path, default=Path(__file__).parent / "data" / "widiv_2000SNPs.vcf.gz",
+        help="Genotype panel (VCF, optionally gzipped)",
+    )
+    variety_p.add_argument(
+        "--cache", type=Path, default=Path(__file__).parent / "data" / "ocs_frontier_cache.npz",
+        help="Pareto frontier cache file (recomputed automatically if params change)",
+    )
+    variety_p.add_argument("--k", type=int, default=20, help="Number of parent lines per candidate cross set")
+    variety_p.add_argument("--pop-size", type=int, default=80, help="NSGA-II population size")
+    variety_p.add_argument("--n-gen", type=int, default=120, help="NSGA-II generations")
+    variety_p.add_argument("--seed", type=int, default=1, help="NSGA-II random seed")
+    variety_p.add_argument("--regen-frontier", action="store_true", help="Force recomputation even if a valid cache exists")
+    variety_p.set_defaults(func=cmd_variety)
 
     return parser
 

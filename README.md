@@ -117,6 +117,58 @@ scheduling logic. Swap the dict shape in `_commands_for_field()` for your
 actual device protocol (MQTT topic/payload, Modbus register writes, etc.)
 when wiring this to real hardware.
 
+## Variety recommendation (phase 1 breeding demo)
+
+`farm_report.py variety` recommends maize lines per corn field using
+multi-objective genomic selection — the same Pareto-frontier idea behind
+[PyBrOpS](https://github.com/rzshrote/pybrops) / the paper this project was
+inspired by ([Shrote & Beavis, *G3*, 2024](https://doi.org/10.1093/g3journal/jkae199)),
+reimplemented from scratch on top of [`pymoo`](https://pymoo.org/) directly
+rather than the `pybrops` package itself.
+
+```bash
+pip install -r requirements-breeding.txt
+python farm_report.py variety --config farm_layout.json --output-dir out/
+```
+
+**Why not just use `pybrops`:** it hard-requires `cyvcf2` for genotype
+loading, and `cyvcf2` has no Windows wheel (Linux/macOS only). This phase-1
+version stays fully native on Windows by parsing the VCF with the stdlib
+`gzip` module and running the multi-objective search with `pymoo` (the same
+optimizer `pybrops` itself wraps). A real `pybrops` integration — actual
+`cyvcf2`-backed VCF loading, `OptimalContributionSubsetSelection`,
+multi-generation breeding simulation — is planned as phase 2, to run on
+Linux where the dependency actually installs.
+
+**What it does:**
+1. Loads real genotype data — 942 lines x 2000 SNPs from the Wisconsin
+   Diversity (WiDiv) maize panel, vendored from PyBrOpS's own examples
+   (see `data/ATTRIBUTION.md`).
+2. Synthesizes two negatively-correlated trait effects, `cold_tolerance`
+   and `drought_tolerance`, over those markers — mirroring PyBrOpS's own
+   demo almost exactly. **These are simulated trait effects, not measured
+   phenotypes** — the panel has no public cold/drought phenotyping, so this
+   demonstrates the selection methodology, not a real agronomic call.
+3. Runs an NSGA-II subset-selection genetic algorithm (`breeding.py`) to
+   find the Pareto frontier trading off mean breeding value per trait
+   against within-subset inbreeding (a genomic relationship / kinship
+   matrix computed via VanRaden method 1) — conceptually the same problem
+   Optimal Contribution Selection solves. This is the expensive step, so
+   the frontier is cached to `data/ocs_frontier_cache.npz` and only
+   recomputed when its parameters change (or `--regen-frontier` is passed).
+4. For each corn field, converts its `frost_temp_c` / `soil_moisture_min`
+   thresholds into a `(cold_weight, drought_weight)` preference — a lower
+   threshold means the grower leans more on the crop's innate tolerance
+   before intervening — and picks the frontier point that best matches it,
+   reporting the real WiDiv line IDs in that selection.
+
+Output: `variety_recommendations_YYYY-MM-DD.md` in `--output-dir`, one
+section per corn field with its trait weights and top candidate lines.
+
+Only `crop: "corn"` fields are handled in phase 1 — other crops are logged
+and skipped, since the maize panel is the only genotype data currently
+vendored.
+
 ## Testing without network access
 
 `test_offline.py` monkeypatches `GridDataClient.fetch` with synthetic data
