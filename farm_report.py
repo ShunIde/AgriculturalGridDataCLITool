@@ -10,8 +10,15 @@ farm_report.py — A single CLI with three subcommands:
            operations report and/or a set of mock hardware commands.
 
   variety  Recommend maize lines per corn field via climate-informed
-           multi-objective genomic selection over a real SNP panel
-           (see breeding.py — requires `pip install -r requirements-breeding.txt`).
+           multi-objective genomic selection over a real SNP panel. Uses the
+           real `pybrops` + `cyvcf2` engine when available (Linux/macOS —
+           see breeding_pybrops.py), falling back to a from-scratch
+           `pymoo` reimplementation otherwise (Windows-safe — see
+           breeding.py). Override with `--engine {pymoo,pybrops}`.
+
+  breeding-sim  Simulate several generations of OCS-driven selection +
+           mating per corn field using the real pybrops engine (Linux/macOS
+           only — see breeding_pybrops.py).
 
 Usage:
     # 1) Generate a config from real field data
@@ -22,6 +29,9 @@ Usage:
 
     # 3) Recommend maize varieties per field
     python farm_report.py variety --config farm_layout.json --output-dir out/
+
+    # 4) Simulate multiple generations of selection + mating (pybrops only)
+    python farm_report.py breeding-sim --config farm_layout.json --generations 5
 
 Data sources (all free, no API key required):
     - Nominatim (geocoding a place name -> bounding box)
@@ -614,12 +624,24 @@ class CommandGenerator:
 # ==========================================================================
 
 
-def cmd_variety(args: argparse.Namespace) -> int:
+def _resolve_variety_engine(requested: str) -> str:
+    """
+    'auto' tries the real pybrops engine first (Linux/macOS only) and falls
+    back to the from-scratch pymoo engine if pybrops/cyvcf2 aren't
+    installed, so the same command works out of the box on either platform.
+    """
+    if requested != "auto":
+        return requested
     try:
-        import breeding
-    except ImportError as e:
-        log.error("%s", e)
-        return 1
+        import pybrops  # noqa: F401
+        import cyvcf2  # noqa: F401
+    except ImportError:
+        return "pymoo"
+    return "pybrops"
+
+
+def cmd_variety(args: argparse.Namespace) -> int:
+    engine = _resolve_variety_engine(args.engine)
 
     try:
         layout = FarmLayout(args.config)
@@ -635,7 +657,7 @@ def cmd_variety(args: argparse.Namespace) -> int:
     if other_crops:
         log.info(
             "Skipping %d field(s) with crop(s) %s - only 'corn' is supported "
-            "in phase 1 (the only genotype panel currently vendored).",
+            "(the only genotype panel currently vendored).",
             len(layout.fields) - len(corn_fields), other_crops,
         )
     if not corn_fields:
@@ -646,27 +668,58 @@ def cmd_variety(args: argparse.Namespace) -> int:
         log.error("Genotype panel not found: %s", args.vcf)
         return 1
 
-    try:
-        panel = breeding.load_vcf_dosage(args.vcf)
-        marker_effects = breeding.build_synthetic_marker_effects(panel.dosage.shape[1])
-        gebv = breeding.compute_gebv(panel, marker_effects)
-        grm = breeding.compute_grm(panel.dosage)
-
-        frontier = breeding.compute_or_load_frontier(
-            panel, gebv, grm,
-            vcf_path=args.vcf,
-            cache_path=args.cache,
-            k=args.k,
-            pop_size=args.pop_size,
-            n_gen=args.n_gen,
-            seed=args.seed,
-            force_regen=args.regen_frontier,
+    cache_path = args.cache
+    if cache_path is None:
+        cache_path = args.vcf.parent / (
+            "ocs_frontier_cache_pybrops.npz" if engine == "pybrops" else "ocs_frontier_cache.npz"
         )
+
+    try:
+        if engine == "pybrops":
+            log.info("Using engine: pybrops (real cyvcf2-backed OptimalContributionSubsetSelection)")
+            import breeding_pybrops
+
+            pgmat = breeding_pybrops.load_pgmat(args.vcf)
+            gpmod = breeding_pybrops.build_genomic_model(pgmat.nvrnt)
+            frontier = breeding_pybrops.compute_or_load_ocs_frontier(
+                pgmat, gpmod,
+                vcf_path=args.vcf,
+                cache_path=cache_path,
+                k=args.k,
+                pop_size=args.pop_size,
+                n_gen=args.n_gen,
+                seed=args.seed,
+                force_regen=args.regen_frontier,
+            )
+            gebv = gpmod.gebv(pgmat).mat
+            taxa = list(pgmat.taxa)
+        else:
+            log.info("Using engine: pymoo (from-scratch reimplementation, no cyvcf2 required)")
+            import breeding
+
+            panel = breeding.load_vcf_dosage(args.vcf)
+            marker_effects = breeding.build_synthetic_marker_effects(panel.dosage.shape[1])
+            gebv = breeding.compute_gebv(panel, marker_effects)
+            grm = breeding.compute_grm(panel.dosage)
+
+            frontier = breeding.compute_or_load_frontier(
+                panel, gebv, grm,
+                vcf_path=args.vcf,
+                cache_path=cache_path,
+                k=args.k,
+                pop_size=args.pop_size,
+                n_gen=args.n_gen,
+                seed=args.seed,
+                force_regen=args.regen_frontier,
+            )
+            taxa = panel.taxa
     except ImportError as e:
         log.error("%s", e)
         return 1
 
-    recommendations = breeding.build_recommendations(corn_fields, frontier, gebv, panel.taxa)
+    import breeding  # report/recommendation code lives here regardless of engine
+
+    recommendations = breeding.build_recommendations(corn_fields, frontier, gebv, taxa)
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     today_str = date.today().isoformat()
@@ -676,6 +729,63 @@ def cmd_variety(args: argparse.Namespace) -> int:
         encoding="utf-8",
     )
     log.info("Variety report written to %s", report_path)
+    return 0
+
+
+def cmd_breeding_sim(args: argparse.Namespace) -> int:
+    try:
+        import breeding
+        import breeding_pybrops
+    except ImportError as e:
+        log.error("%s", e)
+        return 1
+
+    try:
+        layout = FarmLayout(args.config)
+    except FileNotFoundError:
+        log.error("Config file not found: %s", args.config)
+        return 1
+    except (ValueError, json.JSONDecodeError) as e:
+        log.error("Invalid farm_layout.json: %s", e)
+        return 1
+
+    corn_fields = [f for f in layout.fields if f.crop.strip().lower() == "corn"]
+    if not corn_fields:
+        log.warning("No corn fields found in %s - nothing to simulate.", args.config)
+        return 1
+
+    if not args.vcf.exists():
+        log.error("Genotype panel not found: %s", args.vcf)
+        return 1
+
+    pgmat = breeding_pybrops.load_pgmat(args.vcf)
+    breeding_pybrops.assign_approximate_genetic_map(pgmat)
+    gpmod = breeding_pybrops.build_genomic_model(pgmat.nvrnt)
+
+    results = []
+    for f in corn_fields:
+        log.info("Simulating %d generations for field %s...", args.generations, f.id)
+        results.append(
+            breeding_pybrops.simulate_breeding_generations(
+                pgmat, gpmod, f,
+                n_generations=args.generations,
+                n_crosses=args.n_crosses,
+                nmating=args.nmating,
+                nprogeny=args.nprogeny,
+                pop_size=args.pop_size,
+                n_gen_ga=args.n_gen,
+                seed=args.seed,
+            )
+        )
+
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    today_str = date.today().isoformat()
+    report_path = args.output_dir / f"breeding_simulation_{today_str}.md"
+    report_path.write_text(
+        breeding_pybrops.BreedingSimReportGenerator(layout.farm_name, results).build(),
+        encoding="utf-8",
+    )
+    log.info("Breeding simulation report written to %s", report_path)
     return 0
 
 
@@ -769,15 +879,45 @@ def build_argparser() -> argparse.ArgumentParser:
         help="Genotype panel (VCF, optionally gzipped)",
     )
     variety_p.add_argument(
-        "--cache", type=Path, default=Path(__file__).parent / "data" / "ocs_frontier_cache.npz",
-        help="Pareto frontier cache file (recomputed automatically if params change)",
+        "--cache", type=Path, default=None,
+        help="Pareto frontier cache file (recomputed automatically if params change). "
+        "Defaults to data/ocs_frontier_cache.npz (pymoo engine) or "
+        "data/ocs_frontier_cache_pybrops.npz (pybrops engine) if omitted.",
     )
     variety_p.add_argument("--k", type=int, default=20, help="Number of parent lines per candidate cross set")
     variety_p.add_argument("--pop-size", type=int, default=80, help="NSGA-II population size")
     variety_p.add_argument("--n-gen", type=int, default=120, help="NSGA-II generations")
     variety_p.add_argument("--seed", type=int, default=1, help="NSGA-II random seed")
     variety_p.add_argument("--regen-frontier", action="store_true", help="Force recomputation even if a valid cache exists")
+    variety_p.add_argument(
+        "--engine", choices=["auto", "pymoo", "pybrops"], default="auto",
+        help="'pybrops' uses the real pybrops+cyvcf2 OptimalContributionSubsetSelection "
+        "(Linux/macOS only, see breeding_pybrops.py); 'pymoo' uses the from-scratch "
+        "Windows-compatible reimplementation (see breeding.py); 'auto' (default) picks "
+        "pybrops if installed, else falls back to pymoo",
+    )
     variety_p.set_defaults(func=cmd_variety)
+
+    breeding_sim_p = sub.add_parser(
+        "breeding-sim",
+        parents=[common],
+        help="Simulate several generations of OCS-driven selection and mating per corn "
+        "field using the real pybrops engine (phase 2 - see breeding_pybrops.py)",
+    )
+    breeding_sim_p.add_argument("--config", type=Path, default=Path("farm_layout.json"), help="Path to farm_layout.json")
+    breeding_sim_p.add_argument("--output-dir", type=Path, default=Path("."), help="Directory to write the report into")
+    breeding_sim_p.add_argument(
+        "--vcf", type=Path, default=Path(__file__).parent / "data" / "widiv_2000SNPs.vcf.gz",
+        help="Genotype panel (VCF, optionally gzipped)",
+    )
+    breeding_sim_p.add_argument("--generations", type=int, default=5, help="Number of generations to simulate")
+    breeding_sim_p.add_argument("--n-crosses", type=int, default=10, help="Number of biparental crosses selected per generation")
+    breeding_sim_p.add_argument("--nmating", type=int, default=1, help="Matings per selected cross")
+    breeding_sim_p.add_argument("--nprogeny", type=int, default=10, help="Progeny produced per mating")
+    breeding_sim_p.add_argument("--pop-size", type=int, default=60, help="NSGA-II population size (per generation)")
+    breeding_sim_p.add_argument("--n-gen", type=int, default=60, help="NSGA-II generations (per breeding generation)")
+    breeding_sim_p.add_argument("--seed", type=int, default=1, help="Random seed")
+    breeding_sim_p.set_defaults(func=cmd_breeding_sim)
 
     return parser
 

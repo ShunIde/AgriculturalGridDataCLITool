@@ -410,6 +410,29 @@ def field_trait_weights(frost_temp_c: float, soil_moisture_min: float) -> tuple[
     return (cold_shifted / total, drought_shifted / total)
 
 
+def _normalize(v: np.ndarray) -> np.ndarray:
+    span = v.max() - v.min()
+    return (v - v.min()) / span if span > 0 else np.zeros_like(v)
+
+
+def score_frontier(objectives: np.ndarray, cold_weight: float, drought_weight: float) -> np.ndarray:
+    """
+    Scores each frontier point given a field's (cold_weight, drought_weight)
+    preference. `objectives` follows the ParetoFrontier convention: columns
+    are (-meanBV_cold, -meanBV_drought, mean_kinship). Higher score is better.
+    Shared by the phase-1 pymoo frontier and the phase-2 pybrops OCS frontier
+    (see breeding_pybrops.py), since both produce frontiers in this shape.
+    """
+    gain_cold = -objectives[:, 0]
+    gain_drought = -objectives[:, 1]
+    kinship = objectives[:, 2]
+    return (
+        cold_weight * _normalize(gain_cold)
+        + drought_weight * _normalize(gain_drought)
+        - DIVERSITY_PENALTY_WEIGHT * _normalize(kinship)
+    )
+
+
 def recommend_for_field(
     field: Any,  # farm_report.Field — kept as Any to avoid a circular import
     frontier: ParetoFrontier,
@@ -423,15 +446,7 @@ def recommend_for_field(
     gain_drought = -frontier.objectives[:, 1]
     kinship = frontier.objectives[:, 2]
 
-    def normalize(v: np.ndarray) -> np.ndarray:
-        span = v.max() - v.min()
-        return (v - v.min()) / span if span > 0 else np.zeros_like(v)
-
-    score = (
-        cold_weight * normalize(gain_cold)
-        + drought_weight * normalize(gain_drought)
-        - DIVERSITY_PENALTY_WEIGHT * normalize(kinship)
-    )
+    score = score_frontier(frontier.objectives, cold_weight, drought_weight)
     best_idx = int(np.argmax(score))
 
     mask = frontier.masks[best_idx]
